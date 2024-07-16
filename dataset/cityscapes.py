@@ -42,7 +42,8 @@ class cityscapes(BaseDataset):
                 self.id_2_name.update({lbl.id : lbl.name})
 
 
-        txt_path = os.path.join(filenames_path, 'cityscapes')
+        # txt_path = os.path.join(filenames_path, 'cityscapes')
+        txt_path = filenames_path
         if self.split=='train':
             txt_path += '/cityscapes_train.txt'
         elif self.split =='val':
@@ -61,20 +62,23 @@ class cityscapes(BaseDataset):
         return len(self.filenames_list)
 
     def __getitem__(self, idx):
-        img_path =   self.data_path + self.filenames_list[idx].split(' ')[0] #left
-        seg_path=    self.data_path + self.filenames_list[idx].split(' ')[1] #mask
-        depth_path = self.data_path + self.filenames_list[idx].split(' ')[2] #depth
+        img_path =   self.data_path + '/' + self.filenames_list[idx].split(' ')[0] #left
+        seg_path =   self.data_path + '/' + self.filenames_list[idx].split(' ')[1] #mask
+        depth_path = self.data_path + '/' + self.filenames_list[idx].split(' ')[2] #depth
         
         filename = depth_path.split("/")[-1]
-        filename = filename.split("_crestereo_depth.png")[0]
+        # filename = filename.split("_crestereo_depth.png")[0]
+        filename = filename.split("_disparity.png")[0]
 
         image = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB) 
-        depth = cv2.imread(depth_path, cv2.IMREAD_ANYDEPTH).astype('float32') 
+        # depth = cv2.imread(depth_path, cv2.IMREAD_ANYDEPTH).astype('float32')
+        depth = cv2.imread(depth_path, cv2.IMREAD_UNCHANGED).astype('float32')
+        depth = (depth - 1 ) / 256.
 
-        dmin= 0.0001
+        dmin= 0.001
         dmax= 80
         #normalized in log space
-        depth = np.log(depth.clip(dmin,dmax)/dmin)/np.log(dmax/dmin)                
+        # depth = np.log(depth.clip(dmin,dmax)/dmin)/np.log(dmax/dmin)
         seg   = cv2.imread(seg_path, cv2.IMREAD_UNCHANGED) 
 
         # get label id
@@ -99,6 +103,24 @@ class cityscapes(BaseDataset):
             
         return {'image': image, 'depth': depth, 'seg': seg, 'filename' : filename}
         
-        
-        
-        
+
+def create_filenames(root, split='train', output_file=None):
+    if output_file is None:
+        output_file = os.path.join(root, f'filenames/cityscapes_{split}.txt')
+
+    images_dir = os.path.join('leftImg8bit', split)
+    targets_dir = os.path.join('gtFine', split)
+    disparities_dir = os.path.join('disparity', split)
+
+    with open(output_file, 'w') as f:
+        for city in os.listdir(os.path.join(root, images_dir)):
+            img_dir = os.path.join(images_dir, city)
+            target_dir = os.path.join(targets_dir, city)
+            disparity_dir = os.path.join(disparities_dir, city)
+
+            # add img_dir, target_dir, disparity_dir to the output file txt separated by space
+            for file_name in os.listdir(os.path.join(root, img_dir)):
+                base_file_name = file_name.split("_leftImg8bit")[0]
+                target_name = f"{base_file_name}_gtFine_labelIds.png"
+                disparity_name = f"{base_file_name}_disparity.png"
+                f.write(f"{os.path.join(img_dir, file_name)} {os.path.join(target_dir, target_name)} {os.path.join(disparity_dir, disparity_name)}\n")
